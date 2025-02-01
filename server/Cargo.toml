@@ -4,5 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-sqlite = { version = "0.4.0", features = [] }
+clap = { version = "4.5.27", features = ["derive"] }
+reqwest = { version = "0.12.12", features = ["json"] }
+rocket = { version = "0.5.1", features = ["json", "serde_json"] }
+serde = { version = "1.0.217", features = ["derive", "rc"] }
+serde_json = "1.0.135"
+time = { version = "0.3.37", features = ["parsing", "serde"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "sync"] }
-warp = "0.3.7"

@@ -1,5 +1,5 @@
 mod args;
-mod api;
+mod types;
 mod db;
 
 use clap::Parser;

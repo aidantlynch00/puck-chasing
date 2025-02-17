@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde::de::Error;
 use time::OffsetDateTime;
 use time::serde::iso8601;
-use crate::api::{Username, PlayerId, MatchId};
+use crate::types::{Username, PlayerId, MatchId};
 
 #[derive(Deserialize)]
 pub struct RecentHistory {

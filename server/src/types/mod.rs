@@ -1,5 +1,5 @@
 pub mod slapshot;
-pub mod tracker;
+pub mod db;
 
 use std::sync::Arc;
 use std::ops::Deref;

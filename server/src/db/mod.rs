@@ -39,7 +39,7 @@ impl ConnectionPool {
             .map_err(|err| RunError::User(PoolError::QueryError(err)))?;
 
         // TODO: add a timestamp
-        sql_query(r#"
+        let _ = sql_query(r#"
             CREATE TABLE IF NOT EXISTS matches (
                 internal_id INTEGER PRIMARY KEY,
                 match_id VAR_CHAR(40) NOT NULL UNIQUE
@@ -49,7 +49,7 @@ impl ConnectionPool {
             .await
             .map_err(|err| RunError::User(PoolError::QueryError(err)))?;
 
-        sql_query(r#"
+        let _ = sql_query(r#"
             CREATE TABLE IF NOT EXISTS names (
                 player_id INTEGER NOT NULL,
                 name VARCHAR(32) NOT NULL,
@@ -61,7 +61,7 @@ impl ConnectionPool {
             .await
             .map_err(|err| RunError::User(PoolError::QueryError(err)))?;
 
-        sql_query(r#"
+        let _ = sql_query(r#"
             CREATE TABLE IF NOT EXISTS match_players (
                 match_id INTEGER NOT NULL,
                 player_id INTEGER NOT NULL,

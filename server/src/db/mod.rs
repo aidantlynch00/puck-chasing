@@ -1,4 +1,4 @@
-mod schema;
+pub mod schema;
 
 use diesel::{sql_query, SqliteConnection};
 use diesel_async::RunQueryDsl;
@@ -30,7 +30,7 @@ impl ConnectionPool {
 
         let _ = sql_query(r#"
             CREATE TABLE IF NOT EXISTS players (
-                internal_id INTEGER PRIMARY KEY,
+                internal_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slap_id VARCHAR(40) NOT NULL UNIQUE
             );
         "#)
@@ -41,7 +41,7 @@ impl ConnectionPool {
         // TODO: add a timestamp
         let _ = sql_query(r#"
             CREATE TABLE IF NOT EXISTS matches (
-                internal_id INTEGER PRIMARY KEY,
+                internal_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 match_id VAR_CHAR(40) NOT NULL UNIQUE
             );
         "#)

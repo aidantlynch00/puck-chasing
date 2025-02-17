@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-sqlite = { version = "0.4.0", features = [] }
 clap = { version = "4.5.27", features = ["derive"] }
+diesel = { version = "2.2.7", features = ["sqlite"] }
+diesel-async = { version = "0.5.2", features = ["bb8", "sqlite"] }
 reqwest = { version = "0.12.12", features = ["json"] }
 rocket = { version = "0.5.1", features = ["json", "serde_json"] }
 serde = { version = "1.0.217", features = ["derive", "rc"] }

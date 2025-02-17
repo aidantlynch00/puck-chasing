@@ -1,16 +1,16 @@
 mod args;
 mod api;
-mod database;
+mod db;
 
 use clap::Parser;
 use args::Args;
-use database::ConnectionPool;
+use db::ConnectionPool;
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
 
-    let pool = ConnectionPool::open(args.database)
+    let pool = ConnectionPool::open(args.database.to_string_lossy())
         .await
         .expect("could not create connection pool");
 

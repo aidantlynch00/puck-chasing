@@ -4,8 +4,8 @@ use clap::Parser;
 #[derive(Parser)]
 pub struct Args {
     #[arg(
-        short = 'd',
-        long = "database",
+        short = 'e',
+        long = "env",
     )]
-    pub database: PathBuf,
+    pub env: PathBuf,
 }

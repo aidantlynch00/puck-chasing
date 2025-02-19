@@ -1,10 +1,14 @@
 pub mod schema;
 
-use diesel::{sql_query, SqliteConnection};
+use std::borrow::Cow;
+use diesel::dsl::*;
+use diesel::{sql_query, SqliteConnection, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::pooled_connection::{AsyncDieselConnectionManager, PoolError};
 use diesel_async::pooled_connection::bb8::{Pool, RunError};
+use crate::types::slapshot::Player;
+use crate::types::db::{NewPlayerRow, PlayerRow};
 
 type AsyncSqliteConnection = SyncConnectionWrapper<SqliteConnection>;
 
@@ -21,6 +25,25 @@ impl ConnectionPool {
             .await?;
 
         Ok(Self { pool })
+    }
+
+    pub async fn add_player(&self, player: &Player) -> Result<PlayerRow, RunError> {
+        use crate::db::schema::players::dsl::*;
+
+        let mut conn = self.pool
+            .get()
+            .await?;
+
+        let new_player = NewPlayerRow {
+            slap_id: Cow::Borrowed(&player.game_user_id),
+        };
+
+        insert_into(players)
+            .values(&new_player)
+            .returning(PlayerRow::as_returning())
+            .get_result(&mut conn)
+            .await
+            .map_err(|err| RunError::User(PoolError::QueryError(err)))
     }
 
     pub async fn create_tables(&self) -> Result<(), RunError> {

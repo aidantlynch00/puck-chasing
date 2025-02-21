@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use clap::Parser;
 use args::Args;
 use dotenv::{from_path, var};
-use db::ConnectionPool;
+use db::pool::ConnectionPool;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -37,8 +37,17 @@ async fn main() -> ExitCode {
         }
     };
 
+    // get connection from the pool
+    let mut conn = match pool.conn().await {
+        Ok(conn) => conn,
+        Err(db_err) => {
+            eprintln!("Could not get database connection: {db_err}");
+            return ExitCode::FAILURE;
+        }
+    };
+
     // create the database tables if they do not exist
-    if let Err(table_err) = pool.create_tables().await {
+    if let Err(table_err) = conn.create_tables().await {
         eprintln!("Could not create tables: {table_err}");
         return ExitCode::FAILURE;
     }

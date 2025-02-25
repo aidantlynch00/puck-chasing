@@ -8,14 +8,16 @@ diesel::table! {
 diesel::table! {
     matches (internal_id) {
         internal_id -> Integer,
-        match_id -> VarChar
+        match_id -> VarChar,
+        created -> TimestamptzSqlite,
     }
 }
 
 diesel::table! {
     names (player_id, name) {
         player_id -> Integer,
-        name -> VarChar
+        name -> VarChar,
+        last_used -> TimestamptzSqlite,
     }
 }
 

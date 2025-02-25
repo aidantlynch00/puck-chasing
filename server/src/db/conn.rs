@@ -1,12 +1,13 @@
 use std::borrow::Cow;
+use time::OffsetDateTime;
 use diesel::dsl::*;
-use diesel::{sql_query, SqliteConnection, SelectableHelper};
+use diesel::{sql_query, SqliteConnection, SelectableHelper, ExpressionMethods};
 use diesel::result::Error;
 use diesel_async::RunQueryDsl;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::pooled_connection::bb8::PooledConnection;
 use crate::types::slapshot::{Player, Username};
-use crate::types::db::{NewPlayerRow, PlayerRow, NameRow};
+use crate::types::db::{NewPlayerRow, PlayerRow, NewNameRow, NameRow};
 
 pub type AsyncSqliteConnection = SyncConnectionWrapper<SqliteConnection>;
 
@@ -29,20 +30,24 @@ impl<'a> Connection<'a> {
             .await
     }
 
-    pub async fn add_player_name(
+    pub async fn add_or_update_player_name(
         &mut self,
         player_row: &PlayerRow<'_>,
-        username: Username
+        username: Username,
     ) -> Result<NameRow, Error> {
         use crate::db::schema::names::dsl::*;
 
-        let new_name = NameRow {
+        let new_name = NewNameRow {
             player_id: player_row.internal_id,
             name: Cow::Borrowed(&username),
         };
 
+        // insert the new name or update the last used timestamp if it exists
         insert_into(names)
             .values(&new_name)
+            .on_conflict((player_id, name))
+            .do_update()
+            .set(last_used.eq(OffsetDateTime::now_utc()))
             .returning(NameRow::as_returning())
             .get_result(&mut self.conn)
             .await
@@ -63,6 +68,7 @@ impl<'a> Connection<'a> {
             CREATE TABLE IF NOT EXISTS matches (
                 internal_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 match_id VAR_CHAR(40) NOT NULL UNIQUE
+                created TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
             );
         "#)
             .execute(&mut self.conn)
@@ -72,6 +78,7 @@ impl<'a> Connection<'a> {
             CREATE TABLE IF NOT EXISTS names (
                 player_id INTEGER NOT NULL,
                 name VARCHAR(32) NOT NULL,
+                last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 PRIMARY KEY (player_id, name),
                 FOREIGN KEY (player_id) REFERENCES players(internal_id)
             );

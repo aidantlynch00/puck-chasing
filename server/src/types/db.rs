@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use time::OffsetDateTime;
 use diesel::sqlite::Sqlite;
 use diesel::{Insertable, Queryable, Selectable};
 use crate::db::schema::{players, matches, names, match_players};
@@ -23,6 +24,7 @@ pub struct PlayerRow<'a> {
 #[diesel(check_for_backend(Sqlite))]
 pub struct NewMatchRow<'a> {
     pub match_id: Cow<'a, str>,
+    pub created: OffsetDateTime,
 }
 
 #[derive(Queryable, Selectable)]
@@ -31,14 +33,25 @@ pub struct NewMatchRow<'a> {
 pub struct MatchRow<'a> {
     pub internal_id: i32,
     pub match_id: Cow<'a, str>,
+    pub created: OffsetDateTime,
 }
 
-#[derive(Insertable, Queryable, Selectable)]
+
+#[derive(Insertable)]
+#[diesel(table_name = names)]
+#[diesel(check_for_backend(Sqlite))]
+pub struct NewNameRow<'a> {
+    pub player_id: i32,
+    pub name: Cow<'a, str>,
+}
+
+#[derive(Queryable, Selectable)]
 #[diesel(table_name = names)]
 #[diesel(check_for_backend(Sqlite))]
 pub struct NameRow<'a> {
     pub player_id: i32,
     pub name: Cow<'a, str>,
+    pub last_used: OffsetDateTime,
 }
 
 #[derive(Insertable, Queryable, Selectable)]

@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 use time::OffsetDateTime;
+use diesel::prelude::*;
 use diesel::dsl::*;
-use diesel::{sql_query, SqliteConnection, SelectableHelper, ExpressionMethods};
 use diesel::result::Error;
 use diesel_async::RunQueryDsl;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::pooled_connection::bb8::PooledConnection;
-use crate::types::slapshot::{Player, Username};
+use crate::types::slapshot::{Player, PlayerId, Username};
 use crate::types::db::{NewPlayerRow, PlayerRow, NewNameRow, NameRow};
 
 pub type AsyncSqliteConnection = SyncConnectionWrapper<SqliteConnection>;
@@ -26,6 +26,16 @@ impl<'a> Connection<'a> {
         insert_into(players)
             .values(&new_player)
             .returning(PlayerRow::as_returning())
+            .get_result(&mut self.conn)
+            .await
+    }
+
+    pub async fn get_player(&mut self, id: &PlayerId) -> Result<PlayerRow, Error> {
+        use crate::db::schema::players::dsl::*;
+
+        players
+            .filter(slap_id.eq(Cow::<'_, str>::Borrowed(id)))
+            .select(PlayerRow::as_select())
             .get_result(&mut self.conn)
             .await
     }
@@ -51,6 +61,41 @@ impl<'a> Connection<'a> {
             .returning(NameRow::as_returning())
             .get_result(&mut self.conn)
             .await
+    }
+
+    pub async fn get_player_names(
+        &mut self,
+        player_row: &PlayerRow<'_>
+    ) -> Result<Vec<NameRow<'_>>, Error> {
+        NameRow::belonging_to(player_row)
+            .select(NameRow::as_select())
+            .load(&mut self.conn)
+            .await
+    }
+
+    pub async fn get_all_player_names(
+        &mut self,
+    ) -> Result<Vec<(PlayerRow, Vec<NameRow>)>, Error> {
+        use crate::db::schema::players;
+
+        let all_players = players::table
+            .select(PlayerRow::as_select())
+            .load(&mut self.conn)
+            .await?;
+
+        let all_names = NameRow::belonging_to(&all_players)
+            .select(NameRow::as_select())
+            .load(&mut self.conn)
+            .await?;
+
+        let player_names = all_names
+            .grouped_by(&all_players)
+            .into_iter()
+            .zip(all_players)
+            .map(|(names, player)| (player, names))
+            .collect::<Vec<(PlayerRow, Vec<NameRow>)>>();
+
+        Ok(player_names)
     }
 
     pub async fn create_tables(&mut self) -> Result<(), Error> {

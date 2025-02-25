@@ -36,9 +36,9 @@ pub struct MatchRow<'a> {
 #[derive(Insertable, Queryable, Selectable)]
 #[diesel(table_name = names)]
 #[diesel(check_for_backend(Sqlite))]
-pub struct NameRow {
+pub struct NameRow<'a> {
     pub player_id: i32,
-    pub name: String,
+    pub name: Cow<'a, str>,
 }
 
 #[derive(Insertable, Queryable, Selectable)]

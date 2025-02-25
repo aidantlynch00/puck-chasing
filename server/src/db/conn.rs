@@ -4,10 +4,9 @@ use diesel::{sql_query, SqliteConnection, SelectableHelper};
 use diesel::result::Error;
 use diesel_async::RunQueryDsl;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
-use diesel_async::pooled_connection::PoolError;
 use diesel_async::pooled_connection::bb8::PooledConnection;
-use crate::types::slapshot::Player;
-use crate::types::db::{NewPlayerRow, PlayerRow};
+use crate::types::slapshot::{Player, Username};
+use crate::types::db::{NewPlayerRow, PlayerRow, NameRow};
 
 pub type AsyncSqliteConnection = SyncConnectionWrapper<SqliteConnection>;
 
@@ -26,6 +25,25 @@ impl<'a> Connection<'a> {
         insert_into(players)
             .values(&new_player)
             .returning(PlayerRow::as_returning())
+            .get_result(&mut self.conn)
+            .await
+    }
+
+    pub async fn add_player_name(
+        &mut self,
+        player_row: &PlayerRow<'_>,
+        username: Username
+    ) -> Result<NameRow, Error> {
+        use crate::db::schema::names::dsl::*;
+
+        let new_name = NameRow {
+            player_id: player_row.internal_id,
+            name: Cow::Borrowed(&username),
+        };
+
+        insert_into(names)
+            .values(&new_name)
+            .returning(NameRow::as_returning())
             .get_result(&mut self.conn)
             .await
     }

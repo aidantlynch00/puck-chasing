@@ -1,9 +1,31 @@
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use std::fmt::Display;
+use tokio::fs::try_exists;
+use diesel::result::ConnectionError;
+use diesel_async::pooled_connection::{AsyncDieselConnectionManager, PoolError};
 use diesel_async::pooled_connection::bb8::{Pool, RunError};
 use crate::db::conn::{AsyncSqliteConnection, Connection};
 
 static POOL_MAX_CONNS: usize = 10;
 
+#[derive(Debug)]
+pub enum PoolCreationError {
+    NotFound(String),
+    Connection(ConnectionError),
+}
+
+impl Display for PoolCreationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PoolCreationError::NotFound(path) =>
+                f.write_fmt(format_args!("database \"{}\" not found", path)),
+            PoolCreationError::Connection(conn_err) =>
+                f.write_fmt(format_args!("database connection error ({})", conn_err)),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct PoolTimeout;
 
 #[derive(Clone, Debug)]
 pub struct ConnectionPool {
@@ -11,28 +33,58 @@ pub struct ConnectionPool {
 }
 
 impl ConnectionPool {
-    pub async fn open<S: Into<String>>(path: S) -> Result<Self, RunError> {
-        let manager = AsyncDieselConnectionManager::<AsyncSqliteConnection>::new(path);
-        let pool = Pool::builder()
+    pub async fn open<S: Into<String>>(path: S) -> Result<Self, PoolCreationError> {
+        // check that the path is an in-memory database or exists on the filesystem
+        let path_str: String = path.into();
+        match path_str.as_str() {
+            ":memory:" => {},
+            path_slice => match try_exists(path_slice).await {
+                Ok(valid) if valid => {},
+                _ => return Err(PoolCreationError::NotFound(path_str))
+            }
+        }
+
+        let manager = AsyncDieselConnectionManager::<AsyncSqliteConnection>::new(path_str);
+        let pool_res = Pool::builder()
             .max_size(POOL_MAX_CONNS as u32)
             .build(manager)
-            .await?;
+            .await;
+
+        // assert that any failures are connection issues
+        let pool = match pool_res {
+            Ok(pool) => pool,
+            Err(err) => match err {
+                PoolError::ConnectionError(conn_err) =>
+                    return Err(PoolCreationError::Connection(conn_err)),
+                PoolError::QueryError(query_err) =>
+                    panic!("should never be a query error when connecting! ({query_err})")
+            }
+        };
 
         Ok(Self { pool })
     }
 
-    pub async fn conn(&self) -> Result<Connection, RunError> {
-        let conn = self.pool.get().await?;
+    pub async fn conn(&self) -> Result<Connection, PoolTimeout> {
+        // assert that any failures are a timeout
+        let conn = match self.pool.get().await {
+            Ok(conn) => conn,
+            Err(run_err) => match run_err {
+                RunError::TimedOut =>
+                    return Err(PoolTimeout),
+                RunError::User(pool_err) =>
+                    panic!("should never be a connection or query error! ({pool_err})")
+            }
+        };
+
         Ok(Connection::from(conn))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use diesel_async::pooled_connection::bb8::RunError;
     use super::*;
 
-    async fn open_in_memory() -> Result<ConnectionPool, RunError> {
+    async fn open_in_memory() -> Result<ConnectionPool, PoolCreationError> {
         ConnectionPool::open(":memory:").await
     }
 
@@ -58,8 +110,7 @@ mod tests {
     #[tokio::test]
     async fn database_dne() {
         let pool_res = ConnectionPool::open("/does/not/exist.db").await;
-        println!("{:?}", pool_res);
-        assert!(pool_res.is_err());
+        assert!(matches!(pool_res, Err(PoolCreationError::NotFound(_))));
     }
 
     #[tokio::test]
@@ -86,7 +137,7 @@ mod tests {
 
         // test last connection result after dropping other connections to
         // avoid any leaks during unwind
-        assert!(conn_res.is_err());
+        assert!(matches!(conn_res, Err(PoolTimeout)));
     }
 
     #[tokio::test]

@@ -40,8 +40,8 @@ async fn main() -> ExitCode {
     // get connection from the pool
     let mut conn = match pool.conn().await {
         Ok(conn) => conn,
-        Err(db_err) => {
-            eprintln!("Could not get database connection: {db_err}");
+        Err(_timeout) => {
+            eprintln!("Timeout while getting database connection");
             return ExitCode::FAILURE;
         }
     };

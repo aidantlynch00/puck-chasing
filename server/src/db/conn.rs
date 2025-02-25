@@ -1,10 +1,11 @@
 use std::borrow::Cow;
 use diesel::dsl::*;
 use diesel::{sql_query, SqliteConnection, SelectableHelper};
+use diesel::result::Error;
 use diesel_async::RunQueryDsl;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::pooled_connection::PoolError;
-use diesel_async::pooled_connection::bb8::{PooledConnection, RunError};
+use diesel_async::pooled_connection::bb8::PooledConnection;
 use crate::types::slapshot::Player;
 use crate::types::db::{NewPlayerRow, PlayerRow};
 
@@ -15,7 +16,7 @@ pub struct Connection<'a> {
 }
 
 impl<'a> Connection<'a> {
-    pub async fn add_player(&mut self, player: &Player) -> Result<PlayerRow, RunError> {
+    pub async fn add_player(&mut self, player: &Player) -> Result<PlayerRow, Error> {
         use crate::db::schema::players::dsl::*;
 
         let new_player = NewPlayerRow {
@@ -27,10 +28,9 @@ impl<'a> Connection<'a> {
             .returning(PlayerRow::as_returning())
             .get_result(&mut self.conn)
             .await
-            .map_err(|err| RunError::User(PoolError::QueryError(err)))
     }
 
-    pub async fn create_tables(&mut self) -> Result<(), RunError> {
+    pub async fn create_tables(&mut self) -> Result<(), Error> {
         let _ = sql_query(r#"
             CREATE TABLE IF NOT EXISTS players (
                 internal_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,8 +38,7 @@ impl<'a> Connection<'a> {
             );
         "#)
             .execute(&mut self.conn)
-            .await
-            .map_err(|err| RunError::User(PoolError::QueryError(err)))?;
+            .await?;
 
         // TODO: add a timestamp
         let _ = sql_query(r#"
@@ -49,8 +48,7 @@ impl<'a> Connection<'a> {
             );
         "#)
             .execute(&mut self.conn)
-            .await
-            .map_err(|err| RunError::User(PoolError::QueryError(err)))?;
+            .await?;
 
         let _ = sql_query(r#"
             CREATE TABLE IF NOT EXISTS names (
@@ -61,8 +59,7 @@ impl<'a> Connection<'a> {
             );
         "#)
             .execute(&mut self.conn)
-            .await
-            .map_err(|err| RunError::User(PoolError::QueryError(err)))?;
+            .await?;
 
         let _ = sql_query(r#"
             CREATE TABLE IF NOT EXISTS match_players (
@@ -74,8 +71,7 @@ impl<'a> Connection<'a> {
             );
         "#)
             .execute(&mut self.conn)
-            .await
-            .map_err(|err| RunError::User(PoolError::QueryError(err)))?;
+            .await?;
 
         // TODO: create ranks table
 

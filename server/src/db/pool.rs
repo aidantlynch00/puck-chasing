@@ -3,7 +3,7 @@ use tokio::fs::try_exists;
 use diesel::result::ConnectionError;
 use diesel_async::pooled_connection::{AsyncDieselConnectionManager, PoolError};
 use diesel_async::pooled_connection::bb8::{Pool, RunError};
-use crate::db::conn::{AsyncSqliteConnection, Connection};
+use crate::db::conn::{AsyncSqliteConnection, PooledSqliteConnection, ConnectionWrapper};
 
 static POOL_MAX_CONNS: usize = 10;
 
@@ -64,7 +64,9 @@ impl ConnectionPool {
         Ok(Self { pool })
     }
 
-    pub async fn conn(&self) -> Result<Connection, PoolTimeout> {
+    pub async fn conn(
+        &self,
+    ) -> Result<ConnectionWrapper<PooledSqliteConnection<'_>>, PoolTimeout> {
         // assert that any failures are a timeout
         let conn = match self.pool.get().await {
             Ok(conn) => conn,
@@ -76,7 +78,7 @@ impl ConnectionPool {
             }
         };
 
-        Ok(Connection::from(conn))
+        Ok(ConnectionWrapper::from(conn))
     }
 }
 
@@ -88,7 +90,9 @@ mod tests {
         ConnectionPool::open(":memory:").await
     }
 
-    async fn take_all_conns(pool: &ConnectionPool) -> Vec<Connection> {
+    async fn take_all_conns(
+        pool: &ConnectionPool,
+    ) -> Vec<ConnectionWrapper<PooledSqliteConnection<'_>>> {
         let mut conns = Vec::new();
         for _ in 0..POOL_MAX_CONNS {
             let conn = pool.conn()
@@ -140,23 +144,4 @@ mod tests {
         assert!(matches!(conn_res, Err(PoolTimeout)));
     }
 
-    #[tokio::test]
-    async fn create_tables() {
-        todo!();
-    }
-
-    #[tokio::test]
-    async fn tables_exist() {
-        todo!();
-    }
-
-    #[tokio::test]
-    async fn add_player() {
-        todo!();
-    }
-
-    #[tokio::test]
-    async fn player_exists() {
-        todo!();
-    }
 }

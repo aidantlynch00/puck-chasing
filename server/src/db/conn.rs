@@ -1,21 +1,28 @@
 use std::borrow::Cow;
+use std::marker::Send;
 use time::OffsetDateTime;
 use diesel::prelude::*;
 use diesel::dsl::*;
+use diesel::sqlite::Sqlite;
 use diesel::result::Error;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::pooled_connection::bb8::PooledConnection;
 use crate::types::slapshot::{Player, PlayerId, Username};
 use crate::types::db::{NewPlayerRow, PlayerRow, NewNameRow, NameRow};
 
 pub type AsyncSqliteConnection = SyncConnectionWrapper<SqliteConnection>;
+pub type PooledSqliteConnection<'a> = PooledConnection<'a, AsyncSqliteConnection>;
 
-pub struct Connection<'a> {
-    conn: PooledConnection<'a, AsyncSqliteConnection>,
+pub struct ConnectionWrapper<C>
+where C: Send + AsyncConnection<Backend = Sqlite>,
+{
+    conn: C,
 }
 
-impl<'a> Connection<'a> {
+impl<C> ConnectionWrapper<C>
+where C: Send + AsyncConnection<Backend = Sqlite>,
+{
     pub async fn add_player(&mut self, player: &Player) -> Result<PlayerRow, Error> {
         use crate::db::schema::players::dsl::*;
 
@@ -149,8 +156,35 @@ impl<'a> Connection<'a> {
     }
 }
 
-impl<'a> From<PooledConnection<'a, AsyncSqliteConnection>> for Connection<'a> {
-    fn from(conn: PooledConnection<'a, AsyncSqliteConnection>) -> Connection<'a> {
-        Connection { conn }
+impl<C> From<C> for ConnectionWrapper<C> 
+where C: Send + AsyncConnection<Backend = Sqlite>,
+{
+    fn from(conn: C) -> ConnectionWrapper<C> {
+        ConnectionWrapper { conn }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn create_tables() {
+        todo!();
+    }
+
+    #[tokio::test]
+    async fn tables_exist() {
+        todo!();
+    }
+
+    #[tokio::test]
+    async fn add_player() {
+        todo!();
+    }
+
+    #[tokio::test]
+    async fn player_exists() {
+        todo!();
     }
 }

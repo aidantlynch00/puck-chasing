@@ -119,7 +119,7 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
         let _ = sql_query(r#"
             CREATE TABLE IF NOT EXISTS matches (
                 internal_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                match_id VAR_CHAR(40) NOT NULL UNIQUE
+                match_id VAR_CHAR(40) NOT NULL UNIQUE,
                 created TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
             );
         "#)

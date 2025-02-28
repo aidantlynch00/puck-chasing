@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::marker::Send;
 use time::OffsetDateTime;
 use diesel::prelude::*;
@@ -8,7 +7,8 @@ use diesel::result::Error;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::pooled_connection::bb8::PooledConnection;
-use crate::types::slapshot::{Player, PlayerId, Username};
+use crate::types::string::{PlayerId, Username};
+use crate::types::slapshot::Player;
 use crate::types::db::{NewPlayerRow, PlayerRow, NewNameRow, NameRow};
 
 pub type AsyncSqliteConnection = SyncConnectionWrapper<SqliteConnection>;
@@ -27,7 +27,7 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
         use crate::db::schema::players::dsl::*;
 
         let new_player = NewPlayerRow {
-            slap_id: Cow::Borrowed(&player.game_user_id),
+            slap_id: PlayerId::clone(&player.game_user_id),
         };
 
         insert_into(players)
@@ -41,7 +41,7 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
         use crate::db::schema::players::dsl::*;
 
         players
-            .filter(slap_id.eq(Cow::<'_, str>::Borrowed(id)))
+            .filter(slap_id.eq(id))
             .select(PlayerRow::as_select())
             .get_result(&mut self.conn)
             .await
@@ -49,14 +49,14 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
 
     pub async fn add_or_update_player_name(
         &mut self,
-        player_row: &PlayerRow<'_>,
+        player_row: &PlayerRow,
         username: Username,
     ) -> Result<NameRow, Error> {
         use crate::db::schema::names::dsl::*;
 
         let new_name = NewNameRow {
             player_id: player_row.internal_id,
-            name: Cow::Borrowed(&username),
+            name: Username::clone(&username),
         };
 
         // insert the new name or update the last used timestamp if it exists
@@ -72,8 +72,8 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
 
     pub async fn get_player_names(
         &mut self,
-        player_row: &PlayerRow<'_>
-    ) -> Result<Vec<NameRow<'_>>, Error> {
+        player_row: &PlayerRow
+    ) -> Result<Vec<NameRow>, Error> {
         NameRow::belonging_to(player_row)
             .select(NameRow::as_select())
             .load(&mut self.conn)
@@ -166,25 +166,96 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
 
 #[cfg(test)]
 mod tests {
+    use diesel::result::Error;
     use super::*;
 
-    #[tokio::test]
-    async fn create_tables() {
-        todo!();
+    async fn get_in_memory_connection() -> ConnectionWrapper<AsyncSqliteConnection> {
+        let conn_res = AsyncSqliteConnection::establish(":memory:").await;
+
+        assert!(
+            conn_res.is_ok(),
+            "could not establish connection to in memory database! ({})",
+            conn_res.err().unwrap()
+        );
+
+        let conn = conn_res.unwrap();
+        ConnectionWrapper { conn }
+    }
+
+    async fn setup_test() -> ConnectionWrapper<AsyncSqliteConnection> {
+        let mut conn = get_in_memory_connection().await;
+        let tables_res = conn.create_tables().await;
+
+        assert!(
+            tables_res.is_ok(),
+            "could not create tables! ({})",
+            tables_res.err().unwrap()
+        );
+
+        conn
     }
 
     #[tokio::test]
-    async fn tables_exist() {
-        todo!();
+    async fn create_tables() {
+        let conn = setup_test().await;
+
+        // TODO: test actual table schemas
+    }
+
+    fn player() -> Player {
+        Player {
+            username: Username::from("player"),
+            game_user_id: PlayerId::from("12345"),
+        }
     }
 
     #[tokio::test]
     async fn add_player() {
-        todo!();
+        let mut conn = setup_test().await;
+        
+        let player = player();
+        let added_player_res = conn.add_player(&player).await;
+        assert!(
+            added_player_res.is_ok(),
+            "could not add player! ({})",
+            added_player_res.err().unwrap()
+        );
+
+        let added_player = added_player_res.unwrap();
+        assert_eq!(*player.game_user_id, *added_player.slap_id);
+    }
+
+    #[tokio::test]
+    async fn add_duplicate_player() {
+        let mut conn = setup_test().await;
+
+        let player = player();
+        let added_player = conn.add_player(&player)
+            .await
+            .unwrap();
+
+        let duplicate_res = conn.add_player(&player).await;
+        assert!(
+            duplicate_res.is_err(),
+            "duplicate player added! (first: {:?}, second: {:?})",
+            added_player,
+            duplicate_res.ok().unwrap()
+        );
     }
 
     #[tokio::test]
     async fn player_exists() {
-        todo!();
+        let mut conn = setup_test().await;
+
+        let player = player();
+        let added_player = conn.add_player(&player)
+            .await
+            .unwrap();
+
+        let retrieved_player_res = conn.get_player(&player.game_user_id).await;
+        assert!(retrieved_player_res.is_ok());
+
+        let retrieved_player = retrieved_player_res.unwrap();
+        assert_eq!(added_player, retrieved_player);
     }
 }

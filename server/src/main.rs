@@ -7,6 +7,7 @@ use clap::Parser;
 use args::Args;
 use dotenv::{from_path, var};
 use db::pool::ConnectionPool;
+use db::conn::DatabaseConnection;
 
 #[tokio::main]
 async fn main() -> ExitCode {

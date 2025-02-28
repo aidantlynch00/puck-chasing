@@ -3,7 +3,7 @@ use tokio::fs::try_exists;
 use diesel::result::ConnectionError;
 use diesel_async::pooled_connection::{AsyncDieselConnectionManager, PoolError};
 use diesel_async::pooled_connection::bb8::{Pool, RunError};
-use crate::db::conn::{AsyncSqliteConnection, PooledSqliteConnection, ConnectionWrapper};
+use crate::db::conn::{AsyncSqliteConnection, PooledSqliteConnection, DatabaseConnection};
 
 static POOL_MAX_CONNS: usize = 10;
 
@@ -66,7 +66,7 @@ impl ConnectionPool {
 
     pub async fn conn(
         &self,
-    ) -> Result<ConnectionWrapper<PooledSqliteConnection<'_>>, PoolTimeout> {
+    ) -> Result<PooledSqliteConnection<'_>, PoolTimeout> {
         // assert that any failures are a timeout
         let conn = match self.pool.get().await {
             Ok(conn) => conn,
@@ -78,7 +78,7 @@ impl ConnectionPool {
             }
         };
 
-        Ok(ConnectionWrapper::from(conn))
+        Ok(conn)
     }
 }
 
@@ -92,7 +92,7 @@ mod tests {
 
     async fn take_all_conns(
         pool: &ConnectionPool,
-    ) -> Vec<ConnectionWrapper<PooledSqliteConnection<'_>>> {
+    ) -> Vec<PooledSqliteConnection<'_>> {
         let mut conns = Vec::new();
         for _ in 0..POOL_MAX_CONNS {
             let conn = pool.conn()

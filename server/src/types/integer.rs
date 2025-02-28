@@ -6,7 +6,7 @@ use diesel::serialize::{ToSql, Output, Result as SerResult};
 use diesel::deserialize::{FromSql, Result as DeserResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsExpression, FromSqlRow)]
-#[sql_type = "Integer"]
+#[diesel(sql_type = Integer)]
 struct InternalId(i32);
 
 impl ToSql<Integer, Sqlite> for InternalId {
@@ -25,7 +25,7 @@ impl FromSql<Integer, Sqlite> for InternalId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsExpression, FromSqlRow)]
-#[sql_type = "Integer"]
+#[diesel(sql_type = Integer)]
 pub struct InternalPlayerId(InternalId);
 
 impl ToSql<Integer, Sqlite> for InternalPlayerId {
@@ -44,7 +44,7 @@ impl FromSql<Integer, Sqlite> for InternalPlayerId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsExpression, FromSqlRow)]
-#[sql_type = "Integer"]
+#[diesel(sql_type = Integer)]
 pub struct InternalMatchId(InternalId);
 
 impl ToSql<Integer, Sqlite> for InternalMatchId {

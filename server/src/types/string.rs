@@ -9,7 +9,7 @@ use diesel::serialize::{ToSql, Output, Result as SerResult};
 use diesel::deserialize::{FromSql, Result as DeserResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, AsExpression, FromSqlRow)]
-#[sql_type = "Text"]
+#[diesel(sql_type = Text)]
 pub struct Username(Arc<str>);
 
 impl From<&str> for Username {
@@ -41,7 +41,7 @@ impl FromSql<Text, Sqlite> for Username {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, AsExpression, FromSqlRow)]
-#[sql_type = "Text"]
+#[diesel(sql_type = Text)]
 pub struct PlayerId(Arc<str>);
 
 impl From<&str> for PlayerId {
@@ -73,7 +73,7 @@ impl FromSql<Text, Sqlite> for PlayerId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, AsExpression, FromSqlRow)]
-#[sql_type = "Text"]
+#[diesel(sql_type = Text)]
 pub struct MatchId(Arc<str>);
 
 impl From<&str> for MatchId {

@@ -1,32 +1,38 @@
 use std::marker::Send;
 use time::OffsetDateTime;
+use tokio::task::JoinSet;
 use diesel::prelude::*;
 use diesel::dsl::*;
 use diesel::sqlite::Sqlite;
-use diesel::result::Error;
+use diesel::result::{OptionalExtension, Error};
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::pooled_connection::bb8::PooledConnection;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use crate::types::string::*;
 use crate::types::integer::*;
-use crate::types::slapshot::Player;
-use crate::types::db::{NewPlayerRow, PlayerRow, NewNameRow, NameRow};
+use crate::types::slapshot::{Player, Match};
+use crate::types::db::*;
 
 pub type AsyncSqliteConnection = SyncConnectionWrapper<SqliteConnection>;
 pub type PooledSqliteConnection<'a> = PooledConnection<'a, AsyncSqliteConnection>;
 
 pub trait DatabaseConnection {
+    async fn add_player(
+        &mut self,
+        player: &Player,
+        first_seen: OffsetDateTime,
+    ) -> Result<PlayerRow, Error>;
+
     async fn add_player_id(&mut self, player_id: &PlayerId) -> Result<PlayerRow, Error>;
 
-    async fn get_player(&mut self, id: &PlayerId) -> Result<PlayerRow, Error>;
-
-    async fn add_player(&mut self, player: &Player) -> Result<NameRow, Error>;
+    async fn get_player_id(&mut self, id: &PlayerId) -> Result<Option<PlayerRow>, Error>;
 
     async fn add_or_update_player_name(
         &mut self,
         player_row: &PlayerRow,
         username: &Username,
+        timestamp: OffsetDateTime,
     ) -> Result<NameRow, Error>;
 
     async fn get_player_names(
@@ -38,12 +44,58 @@ pub trait DatabaseConnection {
         &mut self,
     ) -> Result<Vec<(PlayerRow, Vec<NameRow>)>, Error>;
 
+    async fn add_match(
+        &mut self,
+        new_match: &Match,
+    ) -> Result<MatchRow, Error>;
+
+    async fn add_match_id(
+        &mut self,
+        match_id: &MatchId,
+        timestamp: OffsetDateTime
+    ) -> Result<MatchRow, Error>;
+
+    async fn get_match_id(&mut self, id: &MatchId) -> Result<Option<MatchRow>, Error>;
+
+    async fn add_match_player(
+        &mut self,
+        internal_match_id: InternalMatchId,
+        internal_player_id: InternalPlayerId,
+    ) -> Result<MatchPlayerRow, Error>;
+
+    async fn get_match_players(
+        &mut self,
+        match_row: &MatchRow,
+    ) -> Result<Vec<PlayerRow>, Error>;
+
+    async fn get_player_matches(
+        &mut self,
+        player_row: &PlayerRow,
+    ) -> Result<Vec<MatchRow>, Error>;
+
     async fn create_tables(&mut self) -> Result<(), Error>;
 }
 
 impl<C> DatabaseConnection for C
 where C: Send + AsyncConnection<Backend = Sqlite>,
 {
+    async fn add_player(
+        &mut self,
+        player: &Player,
+        first_seen: OffsetDateTime,
+    ) -> Result<PlayerRow, Error> {
+        self.transaction(|conn| async move {
+            let player_row = conn.add_player_id(&player.game_user_id).await?;
+            let _ = conn.add_or_update_player_name(
+                &player_row,
+                &player.username,
+                first_seen,
+            ).await?;
+
+            Ok(player_row)
+        }.scope_boxed()).await
+    }
+
     async fn add_player_id(&mut self, player_id: &PlayerId) -> Result<PlayerRow, Error> {
         use crate::db::schema::players::dsl::*;
 
@@ -58,7 +110,7 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
             .await
     }
 
-    async fn get_player(&mut self, id: &PlayerId) -> Result<PlayerRow, Error> {
+    async fn get_player_id(&mut self, id: &PlayerId) -> Result<Option<PlayerRow>, Error> {
         use crate::db::schema::players::dsl::*;
 
         players
@@ -66,19 +118,14 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
             .select(PlayerRow::as_select())
             .get_result(self)
             .await
-    }
-
-    async fn add_player(&mut self, player: &Player) -> Result<NameRow, Error> {
-        self.transaction(|conn| async move {
-            let player_row = conn.add_player_id(&player.game_user_id).await?;
-            conn.add_or_update_player_name(&player_row, &player.username).await
-        }.scope_boxed()).await
+            .optional()
     }
 
     async fn add_or_update_player_name(
         &mut self,
         player_row: &PlayerRow,
         username: &Username,
+        timestamp: OffsetDateTime,
     ) -> Result<NameRow, Error> {
         use crate::db::schema::names::dsl::*;
 
@@ -92,7 +139,7 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
             .values(&new_name)
             .on_conflict((player_id, name))
             .do_update()
-            .set(last_used.eq(OffsetDateTime::now_utc()))
+            .set(last_used.eq(timestamp))
             .returning(NameRow::as_returning())
             .get_result(self)
             .await
@@ -131,6 +178,111 @@ where C: Send + AsyncConnection<Backend = Sqlite>,
             .collect::<Vec<(PlayerRow, Vec<NameRow>)>>();
 
         Ok(player_names)
+    }
+
+    async fn add_match(&mut self, new_match: &Match) -> Result<MatchRow, Error> {
+        self.transaction(|conn| async move {
+            let match_row = conn.add_match_id(
+                &new_match.id,
+                new_match.created.clone()
+            ).await?;
+
+            if let Some(stats) = &new_match.game_stats {
+                for match_player in stats.players.iter() {
+                    // get the player's internal ID or add the player if they
+                    // don't exist yet
+                    let player = &match_player.player;
+                    let player_row = match conn.get_player_id(&player.game_user_id).await? {
+                        Some(row) => row,
+                        None => conn.add_player(&player, new_match.created).await?
+                    };
+
+                    // add an association for this player and this match
+                    conn.add_match_player(
+                        match_row.internal_id,
+                        player_row.internal_id
+                    ).await?;
+                }
+            }
+
+            Ok(match_row)
+        }.scope_boxed()).await
+    }
+
+    async fn get_match_id(&mut self, id: &MatchId) -> Result<Option<MatchRow>, Error> {
+        use crate::db::schema::matches::dsl::*;
+
+        matches
+            .filter(match_id.eq(id))
+            .select(MatchRow::as_select())
+            .get_result(self)
+            .await
+            .optional()
+    }
+
+    async fn add_match_id(
+        &mut self,
+        match_id: &MatchId,
+        timestamp: OffsetDateTime
+    ) -> Result<MatchRow, Error> {
+        use crate::db::schema::matches;
+
+        let new_match = NewMatchRow {
+            match_id: MatchId::clone(match_id),
+            created: timestamp,
+        };
+
+        insert_into(matches::table)
+            .values(&new_match)
+            .returning(MatchRow::as_returning())
+            .get_result(self)
+            .await
+    }
+
+    async fn add_match_player(
+        &mut self,
+        internal_match_id: InternalMatchId,
+        internal_player_id: InternalPlayerId,
+    ) -> Result<MatchPlayerRow, Error> {
+        use crate::db::schema::match_players::dsl::*;
+
+        let new_match_player = MatchPlayerRow {
+            match_id: internal_match_id,
+            player_id: internal_player_id,
+        };
+
+        insert_into(match_players)
+            .values(&new_match_player)
+            .returning(MatchPlayerRow::as_returning())
+            .get_result(self)
+            .await
+    }
+
+    async fn get_match_players(
+        &mut self,
+        match_row: &MatchRow,
+    ) -> Result<Vec<PlayerRow>, Error> {
+        use crate::db::schema::players;
+
+        MatchPlayerRow::belonging_to(match_row)
+            .inner_join(players::table)
+            .select(PlayerRow::as_select())
+            .load(self)
+            .await
+    }
+
+    // TODO: should this be paginated?
+    async fn get_player_matches(
+        &mut self,
+        player_row: &PlayerRow,
+    ) -> Result<Vec<MatchRow>, Error> {
+        use crate::db::schema::matches;
+
+        MatchPlayerRow::belonging_to(player_row)
+            .inner_join(matches::table)
+            .select(MatchRow::as_select())
+            .load(self)
+            .await
     }
 
     async fn create_tables(&mut self) -> Result<(), Error> {
@@ -263,12 +415,14 @@ mod tests {
             .await
             .unwrap();
 
-        let retrieved_player_res = conn.get_player(&player_id).await;
+        let retrieved_player_res = conn.get_player_id(&player_id)
+            .await
+            .unwrap();
+
         assert!(
-            retrieved_player_res.is_ok(),
-            "player '{:?}' does not exist! ({})",
-            player_id,
-            retrieved_player_res.err().unwrap()
+            retrieved_player_res.is_some(),
+            "player '{:?}' does not exist!",
+            player_id
         );
 
         let retrieved_player = retrieved_player_res.unwrap();
@@ -280,7 +434,7 @@ mod tests {
         let mut conn = setup_test().await;
 
         let player_id = PlayerId::from("dne_test");
-        let retrieved_player_res = conn.get_player(&player_id).await;
+        let retrieved_player_res = conn.get_player_id(&player_id).await;
         assert!(
             retrieved_player_res.is_err(),
             "player '{:?}' exists! ({:?})",

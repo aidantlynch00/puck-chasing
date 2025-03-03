@@ -60,9 +60,11 @@ pub struct NameRow {
     pub last_used: OffsetDateTime,
 }
 
-#[derive(Debug, PartialEq, Eq, Insertable, Queryable, Selectable, Identifiable)]
+#[derive(Debug, PartialEq, Eq, Insertable, Queryable, Selectable, Identifiable, Associations)]
 #[diesel(table_name = match_players)]
 #[diesel(primary_key(player_id, match_id))]
+#[diesel(belongs_to(PlayerRow, foreign_key = player_id))]
+#[diesel(belongs_to(MatchRow, foreign_key = match_id))]
 #[diesel(check_for_backend(Sqlite))]
 pub struct MatchPlayerRow {
     pub player_id: InternalPlayerId,

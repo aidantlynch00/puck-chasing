@@ -29,8 +29,8 @@ diesel::table! {
 }
 
 diesel::joinable!(names -> players (player_id));
-//diesel::joinable!(matches -> match_players (internal_id));
-//diesel::joinable!(players -> match_players (internal_id));
+diesel::joinable!(match_players -> players (player_id));
+diesel::joinable!(match_players -> matches (match_id));
 
 diesel::allow_tables_to_appear_in_same_query!(players, names);
 diesel::allow_tables_to_appear_in_same_query!(matches, players, match_players);

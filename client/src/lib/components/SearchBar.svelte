@@ -1,9 +1,11 @@
 <script lang='ts'>
+    import { goto } from '$app/navigation'
     import silhouette from '$lib/images/slapshot_silhouette.png'
     
     let searchInput = "";
     let searchResults: [string, string[]][] = [];
 
+    // TODO: Remove below test data when db querying is added
     const data = {
         "1234": ["name 1", "name 2"],
         "5678": ["alias 1", "alias 2", "alias 3"],
@@ -16,10 +18,27 @@
         "2025": ["<script>", "\<script\>console.log(test)\<\/script\>"]
     }
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+        // Using KeyboardEvent.key because KeyboardEvent.keyCode is deprecated
+        switch (e.key) {
+            case "Enter":
+                // Ensure default behavior is disabled
+                e.preventDefault();
+
+                if (searchResults.length == 0) {
+                    return;
+                }
+
+                goto(`/player/${searchResults[0][0]}`)
+
+            default:
+                return;
+        }
+    }
+
     const search = () => {
         searchResults = [];
         if (searchInput != "") {
-            console.log(searchInput)
             searchResults = fuzzySearch(searchInput, data, 4);
         }
     }
@@ -28,10 +47,13 @@
         const results: [string, string[], number][] = [];
 
         for (const [id, aliases] of Object.entries(data)) {
+            // Calculate levenshtein distance of ids and names since we want to be able to search by both
             const idDist = levenshteinDistance(query.toLowerCase(), id.toLowerCase());
             const aliasDists = aliases.map(alias =>
                 levenshteinDistance(query.toLowerCase(), alias.toLowerCase())
             );
+
+            // Get the closest match across all names and the player id
             const minDist = Math.min(idDist, ...aliasDists);
 
             if (minDist <= threshold) {
@@ -39,6 +61,7 @@
             }
         }
 
+        // Sort results by closest levenshtein distance, then drop the distance
         return results
             .sort((a, b) => a[2] - b[2])
             .map(([id, alias, _]) => [id, alias]);
@@ -84,9 +107,8 @@
                 <line x1="21" y1="21" x2="15" y2="15" />
             </svg>
         </div>
-        <input bind:value={searchInput} on:input={() => search()} type="text" name="search" class="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6" placeholder="SlapID or Username">
+        <input bind:value={searchInput} on:input={() => search()} on:keydown={(e) => handleKeyDown(e)} type="text" name="search" class="block min-w-0 grow py-1.5 pr-3 pl-1 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none sm:text-sm/6" placeholder="SlapID or Username">
     </div>
-    <!-- {#if searchResults.length > 0} -->
     {#if searchInput != ""}
     <div id="search-results" class="absolute max-h-[33vh] w-full bg-white rounded-sm text-wrap overflow-y-auto
         [&::-webkit-scrollbar]:w-2

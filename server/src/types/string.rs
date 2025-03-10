@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::ops::Deref;
+use std::fmt::{Display, Formatter, Result};
 use serde::Deserialize;
 use diesel::{AsExpression, FromSqlRow};
 use diesel::sql_types::Text;
@@ -54,6 +55,12 @@ impl Deref for PlayerId {
     type Target = str;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Display for PlayerId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        f.write_str(self)
     }
 }
 

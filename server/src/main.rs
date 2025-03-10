@@ -1,13 +1,20 @@
 mod args;
 mod types;
 mod db;
+mod app;
 
 use std::process::ExitCode;
+use std::sync::Arc;
 use clap::Parser;
 use args::Args;
 use dotenv::{from_path, var};
+use tokio::net::TcpListener;
+use reqwest::Client;
 use db::pool::ConnectionPool;
 use db::conn::DatabaseConnection;
+use axum::serve;
+use app::AppState;
+use app::routes::router;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -53,5 +60,33 @@ async fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    ExitCode::SUCCESS
+    // close the initial connection
+    drop(conn);
+
+    let client = match Client::builder().build() {
+        Ok(client) => client,
+        Err(err) => {
+            eprintln!("Could not create HTTP client: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let app_state = AppState { client, pool };
+    let app_state = Arc::new(app_state);
+
+    let listener = match TcpListener::bind(format!("0.0.0.0:{}", args.port)).await {
+        Ok(listener) => listener,
+        Err(err) => {
+            eprintln!("Could not bind TCP listener: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    match serve(listener, router(app_state)).await {
+        Ok(()) => return ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("Error running app: {err}");
+            return ExitCode::FAILURE;
+        }
+    }
 }

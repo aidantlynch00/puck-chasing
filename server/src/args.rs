@@ -8,4 +8,11 @@ pub struct Args {
         long = "env",
     )]
     pub env: PathBuf,
+
+    #[arg(
+        short = 'p',
+        long = "port",
+        default_value_t = 5149,
+    )]
+    pub port: u16,
 }

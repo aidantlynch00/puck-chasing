@@ -1,112 +1,57 @@
-use std::sync::Arc;
-use std::ops::Deref;
-use std::fmt::{Display, Formatter, Result};
-use serde::{Serialize, Deserialize};
-use diesel::{AsExpression, FromSqlRow};
-use diesel::sql_types::Text;
-use diesel::backend::Backend;
-use diesel::sqlite::Sqlite;
-use diesel::serialize::{ToSql, Output, Result as SerResult};
-use diesel::deserialize::{FromSql, Result as DeserResult};
+macro_rules! string_type {
+    ($type:ident) => {
+        #[derive(
+            Debug, Clone, PartialEq, Eq, Hash,
+            ::serde::Serialize, ::serde::Deserialize,
+            ::diesel::AsExpression, ::diesel::FromSqlRow,
+        )]
+        #[diesel(sql_type = ::diesel::sql_types::Text)]
+        pub struct $type(::std::sync::Arc<str>);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
-#[diesel(sql_type = Text)]
-pub struct Username(Arc<str>);
+        impl From<&str> for $type {
+            fn from(value: &str) -> Self {
+                $type(::std::sync::Arc::from(value))
+            }
+        }
 
-impl From<&str> for Username {
-    fn from(value: &str) -> Self {
-        Username(Arc::from(value))
-    }
+        impl ::std::ops::Deref for $type {
+            type Target = str;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl ::std::fmt::Display for $type {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                f.write_str(self)
+            }
+        }
+
+        impl ::diesel::serialize::ToSql<::diesel::sql_types::Text, ::diesel::sqlite::Sqlite> for $type {
+            fn to_sql<'b>(
+                &'b self,
+                out: &mut ::diesel::serialize::Output<'b, '_, ::diesel::sqlite::Sqlite>
+            ) -> ::diesel::serialize::Result {
+                <str as ::diesel::serialize::ToSql<::diesel::sql_types::Text, ::diesel::sqlite::Sqlite>>::to_sql(
+                    <Self as ::std::ops::Deref>::deref(self),
+                    out
+                )
+            }
+        }
+
+        impl ::diesel::deserialize::FromSql<::diesel::sql_types::Text, ::diesel::sqlite::Sqlite> for $type {
+            fn from_sql(
+                bytes: <::diesel::sqlite::Sqlite as ::diesel::backend::Backend>::RawValue<'_>
+            ) -> ::diesel::deserialize::Result<Self> {
+                let owned = <String as ::diesel::deserialize::FromSql<::diesel::sql_types::Text, ::diesel::sqlite::Sqlite>>::from_sql(bytes)
+                    .expect("column can be expressed as string type!");
+
+                Ok($type::from(owned.as_str()))
+            }
+        }
+    };
 }
 
-impl Deref for Username {
-    type Target = str;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl ToSql<Text, Sqlite> for Username {
-    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> SerResult {
-        <str as ToSql<Text, Sqlite>>::to_sql(self.deref(), out)
-    }
-}
-
-impl FromSql<Text, Sqlite> for Username {
-    fn from_sql(bytes: <Sqlite as Backend>::RawValue<'_>) -> DeserResult<Self> {
-        let owned = <String as FromSql<Text, Sqlite>>::from_sql(bytes)
-            .expect("column can be expressed as string type!");
-
-        Ok(Username::from(owned.as_str()))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
-#[diesel(sql_type = Text)]
-pub struct PlayerId(Arc<str>);
-
-impl From<&str> for PlayerId {
-    fn from(value: &str) -> Self {
-        PlayerId(Arc::from(value))
-    }
-}
-
-impl Deref for PlayerId {
-    type Target = str;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Display for PlayerId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        f.write_str(self)
-    }
-}
-
-impl ToSql<Text, Sqlite> for PlayerId {
-    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> SerResult {
-        <str as ToSql<Text, Sqlite>>::to_sql(self.deref(), out)
-    }
-}
-
-impl FromSql<Text, Sqlite> for PlayerId {
-    fn from_sql(bytes: <Sqlite as Backend>::RawValue<'_>) -> DeserResult<Self> {
-        let owned = <String as FromSql<Text, Sqlite>>::from_sql(bytes)
-            .expect("column can be expressed as string type!");
-
-        Ok(PlayerId::from(owned.as_str()))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
-#[diesel(sql_type = Text)]
-pub struct MatchId(Arc<str>);
-
-impl From<&str> for MatchId {
-    fn from(value: &str) -> Self {
-        MatchId(Arc::from(value))
-    }
-}
-
-impl Deref for MatchId {
-    type Target = str;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl ToSql<Text, Sqlite> for MatchId {
-    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> SerResult {
-        <str as ToSql<Text, Sqlite>>::to_sql(self.deref(), out)
-    }
-}
-
-impl FromSql<Text, Sqlite> for MatchId {
-    fn from_sql(bytes: <Sqlite as Backend>::RawValue<'_>) -> DeserResult<Self> {
-        let owned = <String as FromSql<Text, Sqlite>>::from_sql(bytes)
-            .expect("column can be expressed as string type!");
-
-        Ok(MatchId::from(owned.as_str()))
-    }
-}
+string_type!(Username);
+string_type!(PlayerId);
+string_type!(MatchId);

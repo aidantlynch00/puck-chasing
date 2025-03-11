@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::ops::Deref;
 use std::fmt::{Display, Formatter, Result};
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use diesel::{AsExpression, FromSqlRow};
 use diesel::sql_types::Text;
 use diesel::backend::Backend;
@@ -9,7 +9,7 @@ use diesel::sqlite::Sqlite;
 use diesel::serialize::{ToSql, Output, Result as SerResult};
 use diesel::deserialize::{FromSql, Result as DeserResult};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text)]
 pub struct Username(Arc<str>);
 
@@ -41,7 +41,7 @@ impl FromSql<Text, Sqlite> for Username {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text)]
 pub struct PlayerId(Arc<str>);
 
@@ -79,7 +79,7 @@ impl FromSql<Text, Sqlite> for PlayerId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text)]
 pub struct MatchId(Arc<str>);
 

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use clap::Parser;
 use args::Args;
 use dotenv::{from_path, var};
+use time::OffsetDateTime;
 use tokio::net::TcpListener;
 use reqwest::Client;
 use db::pool::ConnectionPool;
@@ -15,6 +16,8 @@ use db::conn::DatabaseConnection;
 use axum::serve;
 use app::AppState;
 use app::routes::router;
+use crate::types::string::{PlayerId, Username};
+use crate::types::slapshot::Player;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -59,6 +62,26 @@ async fn main() -> ExitCode {
         eprintln!("Could not create tables: {table_err}");
         return ExitCode::FAILURE;
     }
+
+    // TEMPORARY
+    //let players = vec![
+    //    Player {
+    //        game_user_id: PlayerId::from("1"),
+    //        username: Username::from("Leann"),
+    //    },
+    //    Player {
+    //        game_user_id: PlayerId::from("2"),
+    //        username: Username::from("Aidan"),
+    //    },
+    //    Player {
+    //        game_user_id: PlayerId::from("3"),
+    //        username: Username::from("Tokyo <3"),
+    //    },
+    //];
+    //
+    //for player in players.into_iter() {
+    //    conn.add_player(&player, OffsetDateTime::now_utc()).await.unwrap();
+    //}
 
     // close the initial connection
     drop(conn);
